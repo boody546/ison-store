@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "423299705791",
+    "project_id": "ison-bc154",
+    "storage_bucket": "ison-bc154.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:423299705791:android:d988889295ff413e89cf0a",
+        "android_client_info": {
+          "package_name": "com.aistudio.playstore.clone"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "423299705791-75n7nm0b1focri2rhtrqvepb4rbvqv3a.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.playstore.clone",
+            "certificate_hash": "ebd960d8f18abb844203156b9372f5196979f4f0"
+          }
+        },
+        {
+          "client_id": "423299705791-06m9b1stog47pel10dj49hikfinf4n3k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBgILtk_9s0LVkv8g2W5REy2T_7Nj8-4SI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "423299705791-06m9b1stog47pel10dj49hikfinf4n3k.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "ISON Store",
+  "description": "متجر تطبيقات وألعاب متكامل بتصميم عصري مستوحى من جوجل بلاي، يتيح للمستخدمين والمطورين رفع وتنزيل وتقييم التطبيقات والألعاب.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
