@@ -580,9 +580,14 @@ fun rememberGoogleSignInLauncher(
                 }
             } catch (e: com.google.android.gms.common.api.ApiException) {
                 e.printStackTrace()
+                val errorMsg = if (e.statusCode == 10) {
+                    "خطأ (10 DEVELOPER_ERROR): عدم تطابق بصمة SHA-1 مع Firebase Console. يرجى إضافة بصمة SHA-1 الخاصة بجهازك في Firebase Settings."
+                } else {
+                    "خطأ تسجيل الدخول بـ Google (${e.statusCode}): ${e.localizedMessage ?: "إلغاء أو فشل الاتصال"}"
+                }
                 android.widget.Toast.makeText(
                     context,
-                    "خطأ تسجيل الدخول بـ Google (${e.statusCode}): ${e.localizedMessage ?: "إلغاء أو فشل الاتصال"}",
+                    errorMsg,
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             } catch (e: Exception) {

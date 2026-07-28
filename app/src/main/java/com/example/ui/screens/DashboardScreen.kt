@@ -108,10 +108,15 @@ fun DeveloperDashboard(viewModel: StoreViewModel, user: UserEntity) {
     var videoUrl by remember { mutableStateOf("") }
     var bannerColor by remember { mutableStateOf("#FF6200EE") }
 
+    val uploadProgressState by viewModel.uploadProgressState.collectAsState()
+
     val filePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
         apkUri = uri
+        if (uri != null) {
+            size = com.example.util.FileUtils.getFileSizeFormatted(context, uri)
+        }
     }
 
     val iconPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -300,7 +305,8 @@ fun DeveloperDashboard(viewModel: StoreViewModel, user: UserEntity) {
                             OutlinedTextField(
                                 value = size,
                                 onValueChange = { size = it },
-                                label = { Text("الحجم") },
+                                label = { Text("حجم الملف (تلقائي)") },
+                                readOnly = true,
                                 modifier = Modifier.weight(1f),
                                 singleLine = true
                             )
@@ -318,7 +324,7 @@ fun DeveloperDashboard(viewModel: StoreViewModel, user: UserEntity) {
                                 onClick = { filePickerLauncher.launch("application/vnd.android.package-archive") },
                                 modifier = Modifier.weight(1f).height(56.dp)
                             ) {
-                                Text(if (apkUri != null) "تم اختيار APK" else "اختر ملف APK")
+                                Text(if (apkUri != null) "تم اختيار APK ($size)" else "اختر ملف APK")
                             }
                         }
 
@@ -376,6 +382,37 @@ fun DeveloperDashboard(viewModel: StoreViewModel, user: UserEntity) {
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        // Live Progress Indicator Card for Sequential Uploads
+                        if (uploadProgressState !is StoreViewModel.UploadProgressState.Idle) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    val (stepText, progressVal) = when (val p = uploadProgressState) {
+                                        is StoreViewModel.UploadProgressState.UploadingApk -> "جاري رفع ملف APK... (${p.progress}%)" to p.progress / 100f
+                                        is StoreViewModel.UploadProgressState.UploadingIcon -> "جاري رفع أيقونة التطبيق... (${p.progress}%)" to p.progress / 100f
+                                        is StoreViewModel.UploadProgressState.UploadingScreenshots -> "جاري رفع الصور (${p.current}/${p.total})... (${p.progress}%)" to p.progress / 100f
+                                        is StoreViewModel.UploadProgressState.Success -> "تم رفع جميع الملفات ونشر التطبيق بنجاح!" to 1f
+                                        is StoreViewModel.UploadProgressState.Error -> "خطأ في الرفع: ${p.message}" to 0f
+                                        else -> "" to 0f
+                                    }
+                                    Text(stepText, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    if (uploadProgressState !is StoreViewModel.UploadProgressState.Error) {
+                                        LinearProgressIndicator(
+                                            progress = { progressVal },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // Submit with Verification Checklist info
                         Button(
                             onClick = {
@@ -397,6 +434,7 @@ fun DeveloperDashboard(viewModel: StoreViewModel, user: UserEntity) {
                                     onSuccess = {
                                         Toast.makeText(context, "تم نشر اللعبة/التطبيق مباشرة وبنجاح في المتجر!", Toast.LENGTH_LONG).show()
                                         showUploadForm = false
+                                        viewModel.resetUploadProgress()
                                         // Reset
                                         title = ""
                                         packageName = "com.epic."

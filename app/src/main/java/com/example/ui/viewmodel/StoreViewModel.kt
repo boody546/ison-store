@@ -425,14 +425,46 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun uploadToFirebaseStorage(uri: android.net.Uri, folder: String, suffix: String): String {
+    // --- Upload Progress State ---
+    sealed class UploadProgressState {
+        object Idle : UploadProgressState()
+        data class UploadingApk(val progress: Int) : UploadProgressState()
+        data class UploadingIcon(val progress: Int) : UploadProgressState()
+        data class UploadingScreenshots(val current: Int, val total: Int, val progress: Int) : UploadProgressState()
+        object Success : UploadProgressState()
+        data class Error(val message: String) : UploadProgressState()
+    }
+
+    private val _uploadProgressState = MutableStateFlow<UploadProgressState>(UploadProgressState.Idle)
+    val uploadProgressState: StateFlow<UploadProgressState> = _uploadProgressState.asStateFlow()
+
+    fun resetUploadProgress() {
+        _uploadProgressState.value = UploadProgressState.Idle
+    }
+
+    private suspend fun uploadToFirebaseStorageWithProgress(
+        uri: android.net.Uri,
+        folder: String,
+        suffix: String,
+        onProgress: (Int) -> Unit
+    ): String {
         val uriString = uri.toString()
         if (uriString.startsWith("http://") || uriString.startsWith("https://")) {
+            onProgress(100)
             return uriString
         }
         val fileName = "${folder}/${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}$suffix"
         val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference.child(fileName)
-        storageRef.putFile(uri).await()
+        
+        val uploadTask = storageRef.putFile(uri)
+        uploadTask.addOnProgressListener { snapshot ->
+            if (snapshot.totalByteCount > 0) {
+                val progress = ((100.0 * snapshot.bytesTransferred) / snapshot.totalByteCount).toInt()
+                onProgress(progress)
+            }
+        }
+
+        uploadTask.await()
         val downloadUrl = storageRef.downloadUrl.await().toString()
         if (!downloadUrl.startsWith("http://") && !downloadUrl.startsWith("https://")) {
             throw IllegalStateException("لم يتم الحصول على رابط https صالح من Firebase Storage")
@@ -463,35 +495,52 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
         val packageRegex = "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+[a-z0-9_]\$".toRegex()
         if (!packageName.matches(packageRegex)) {
-            onError("اسم الحزمة (Package Name) غير صالح. يجب أن يكون مثل: com.epic.myapp")
+            val err = "اسم الحزمة (Package Name) غير صالح. يجب أن يكون مثل: com.epic.myapp"
+            _uploadProgressState.value = UploadProgressState.Error(err)
+            onError(err)
             return
         }
         if (apkUri == null) {
-            onError("يرجى اختيار ملف APK.")
+            val err = "يرجى اختيار ملف APK أولاً."
+            _uploadProgressState.value = UploadProgressState.Error(err)
+            onError(err)
             return
         }
         if (title.isBlank() || description.isBlank() || size.isBlank()) {
-            onError("يرجى ملء جميع الحقول المطلوبة")
+            val err = "يرجى ملء جميع الحقول المطلوبة"
+            _uploadProgressState.value = UploadProgressState.Error(err)
+            onError(err)
             return
         }
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Upload APK to Firebase Storage -> Get https downloadUrl
-                val apkUrl = uploadToFirebaseStorage(apkUri, "apps", ".apk")
+                // 1. Sequential Upload: Step 1 - APK File
+                _uploadProgressState.value = UploadProgressState.UploadingApk(0)
+                val apkUrl = uploadToFirebaseStorageWithProgress(apkUri, "apps", ".apk") { percent ->
+                    _uploadProgressState.value = UploadProgressState.UploadingApk(percent)
+                }
 
-                // Upload Icon to Firebase Storage -> Get https downloadUrl
+                // 2. Sequential Upload: Step 2 - App Icon (if provided)
                 val savedIconUrl = if (iconUri != null) {
-                    uploadToFirebaseStorage(iconUri, "icons", ".jpg")
+                    _uploadProgressState.value = UploadProgressState.UploadingIcon(0)
+                    uploadToFirebaseStorageWithProgress(iconUri, "icons", ".jpg") { percent ->
+                        _uploadProgressState.value = UploadProgressState.UploadingIcon(percent)
+                    }
                 } else null
 
-                // Upload Screenshots to Firebase Storage -> Get https downloadUrls
+                // 3. Sequential Upload: Step 3 - Screenshots
                 val savedScreenshotUrls = mutableListOf<String>()
-                for (uri in screenshotUris) {
-                    savedScreenshotUrls.add(uploadToFirebaseStorage(uri, "screenshots", ".jpg"))
+                screenshotUris.forEachIndexed { index, uri ->
+                    _uploadProgressState.value = UploadProgressState.UploadingScreenshots(index + 1, screenshotUris.size, 0)
+                    val url = uploadToFirebaseStorageWithProgress(uri, "screenshots", ".jpg") { percent ->
+                        _uploadProgressState.value = UploadProgressState.UploadingScreenshots(index + 1, screenshotUris.size, percent)
+                    }
+                    savedScreenshotUrls.add(url)
                 }
                 val savedScreenshotNames = savedScreenshotUrls.joinToString(",")
 
+                // 4. Save to Firestore
                 val newApp = AppEntity(
                     title = title,
                     packageName = packageName,
@@ -508,21 +557,30 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                     iconUri = savedIconUrl,
                     screenshotUris = savedScreenshotNames,
                     videoUrl = videoUrl,
-                    isVerified = true, // Published immediately without waiting for review
+                    isVerified = true,
                     rating = 0f,
                     ratingsCount = 0,
                     downloadsCount = 0
                 )
 
-                // Save to Firestore ONLY with HTTPS URLs (no local URIs)
                 repository.insertApp(newApp)
+                _uploadProgressState.value = UploadProgressState.Success
                 withContext(Dispatchers.Main) {
                     onSuccess()
                 }
+            } catch (e: com.google.firebase.storage.StorageException) {
+                e.printStackTrace()
+                val detailErr = "خطأ Firebase Storage (${e.errorCode}): ${e.localizedMessage ?: e.message}"
+                _uploadProgressState.value = UploadProgressState.Error(detailErr)
+                withContext(Dispatchers.Main) {
+                    onError(detailErr)
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
+                val detailErr = "فشل الرفع: ${e.localizedMessage ?: e.message ?: "سبب غير معروف"}"
+                _uploadProgressState.value = UploadProgressState.Error(detailErr)
                 withContext(Dispatchers.Main) {
-                    onError("حدث خطأ أثناء رفع الصور/الملفات إلى Firebase Storage: ${e.localizedMessage}")
+                    onError(detailErr)
                 }
             }
         }
@@ -551,15 +609,26 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val app = repository.getAppByIdOneShot(appId)
                 if (app != null) {
-                    val newApkUrl = uploadToFirebaseStorage(newApkUri, "apps", ".apk")
+                    _uploadProgressState.value = UploadProgressState.UploadingApk(0)
+                    val newApkUrl = uploadToFirebaseStorageWithProgress(newApkUri, "apps", ".apk") { percent ->
+                        _uploadProgressState.value = UploadProgressState.UploadingApk(percent)
+                    }
+
                     val updatedIconUrl = if (newIconUri != null) {
-                        uploadToFirebaseStorage(newIconUri, "icons", ".jpg")
+                        _uploadProgressState.value = UploadProgressState.UploadingIcon(0)
+                        uploadToFirebaseStorageWithProgress(newIconUri, "icons", ".jpg") { percent ->
+                            _uploadProgressState.value = UploadProgressState.UploadingIcon(percent)
+                        }
                     } else app.iconUri
 
                     val updatedScreenshotNames = if (newScreenshotUris.isNotEmpty()) {
                         val list = mutableListOf<String>()
-                        for (uri in newScreenshotUris) {
-                            list.add(uploadToFirebaseStorage(uri, "screenshots", ".jpg"))
+                        newScreenshotUris.forEachIndexed { index, uri ->
+                            _uploadProgressState.value = UploadProgressState.UploadingScreenshots(index + 1, newScreenshotUris.size, 0)
+                            val url = uploadToFirebaseStorageWithProgress(uri, "screenshots", ".jpg") { percent ->
+                                _uploadProgressState.value = UploadProgressState.UploadingScreenshots(index + 1, newScreenshotUris.size, percent)
+                            }
+                            list.add(url)
                         }
                         list.joinToString(",")
                     } else {
@@ -576,18 +645,30 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
                         lastUpdated = System.currentTimeMillis()
                     )
                     repository.updateApp(updated)
+                    _uploadProgressState.value = UploadProgressState.Success
                     withContext(Dispatchers.Main) {
                         onSuccess()
                     }
                 } else {
+                    val err = "لم يتم العثور على التطبيق المطلوب تحديثه"
+                    _uploadProgressState.value = UploadProgressState.Error(err)
                     withContext(Dispatchers.Main) {
-                        onError("لم يتم العثور على التطبيق المطلوب تحديثه")
+                        onError(err)
                     }
+                }
+            } catch (e: com.google.firebase.storage.StorageException) {
+                e.printStackTrace()
+                val detailErr = "خطأ Firebase Storage (${e.errorCode}): ${e.localizedMessage ?: e.message}"
+                _uploadProgressState.value = UploadProgressState.Error(detailErr)
+                withContext(Dispatchers.Main) {
+                    onError(detailErr)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                val detailErr = "حدث خطأ أثناء رفع التحديث: ${e.localizedMessage ?: e.message}"
+                _uploadProgressState.value = UploadProgressState.Error(detailErr)
                 withContext(Dispatchers.Main) {
-                    onError("حدث خطأ أثناء رفع التحديث إلى Firebase Storage: ${e.localizedMessage}")
+                    onError(detailErr)
                 }
             }
         }
