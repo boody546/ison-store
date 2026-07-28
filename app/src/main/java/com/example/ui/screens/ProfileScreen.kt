@@ -812,19 +812,89 @@ fun RegisterForm(viewModel: StoreViewModel) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
         )
 
-        // Account role select
-        Text("نوع الحساب المطلوب:", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        // Account role select - Modern Interactive Cards
+        Text(
+            text = "اختر نوع الحساب قبل التسجيل:",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = role == "USER", onClick = { role = "USER" })
-                Text("مستخدم عادي")
+            // User Card Option
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { role = "USER" }
+                    .testTag("role_user_option"),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (role == "USER") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                border = if (role == "USER") androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("👤", fontSize = 28.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "حساب مستخدم",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = if (role == "USER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "تصفح وتحميل التطبيقات",
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = role == "DEVELOPER", onClick = { role = "DEVELOPER" })
-                Text("مطور ألعاب/تطبيقات")
+
+            // Developer Card Option
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { role = "DEVELOPER" }
+                    .testTag("role_dev_option"),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (role == "DEVELOPER") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                border = if (role == "DEVELOPER") androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("🛠️", fontSize = 28.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "حساب مطوّر",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = if (role == "DEVELOPER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "رفع التطبيقات والتقييمات",
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 

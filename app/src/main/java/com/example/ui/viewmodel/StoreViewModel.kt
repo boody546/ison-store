@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.entity.*
 import com.example.data.repository.AppRepository
+import com.example.util.NetworkObserver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -14,6 +15,10 @@ import kotlinx.coroutines.tasks.await
 
 class StoreViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AppRepository()
+    private val networkObserver = NetworkObserver(application)
+
+    val isOnline: StateFlow<Boolean> = networkObserver.isOnline
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), networkObserver.isCurrentlyConnected())
 
     private val sharedPrefs = application.getSharedPreferences("store_prefs", android.content.Context.MODE_PRIVATE)
 
@@ -758,6 +763,10 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- Review Actions ---
+    fun getReviewsForApp(appId: String): Flow<List<ReviewEntity>> {
+        return repository.getReviewsForApp(appId)
+    }
+
     fun postReview(appId: String, rating: Float, comment: String, onComplete: () -> Unit) {
         val user = _currentUser.value ?: return
         viewModelScope.launch(Dispatchers.IO) {

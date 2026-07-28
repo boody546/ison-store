@@ -46,11 +46,43 @@ fun HomeScreen(
         listOf("الكل", "الصحة والرشاقة", "المالية", "الإنتاجية", "التواصل الاجتماعي", "فوتوغرافيا")
     }
 
+    val isOnline by viewModel.isOnline.collectAsState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // Offline Warning Banner
+        if (!isOnline) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "تنبيه: لا يوجد اتصال بالإنترنت. يرجى التوصيل بالشبكة.",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
         // 1. Google Play Style Custom Top Search Bar
         Card(
             modifier = Modifier
@@ -271,7 +303,7 @@ fun HomeScreen(
             }
         }
 
-        // 4. Featured Banners & App Catalog List
+        // 4. Featured Banners & App Catalog List (Categorized)
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -283,9 +315,59 @@ fun HomeScreen(
                 item {
                     FeaturedBannerCarousel(viewModel = viewModel, apps = apps.take(3))
                 }
+
+                // Section 1: 🔥 الأكثر تحميلاً (Top Downloads)
+                val topDownloads = apps.sortedByDescending { it.downloadsCount }.take(5)
+                if (topDownloads.isNotEmpty()) {
+                    item {
+                        Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                            Text(
+                                text = "🔥 الأكثر تحميلاً",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(topDownloads) { app ->
+                                    TopDownloadCardItem(app = app, onClick = { viewModel.selectApp(app.id) })
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Section 2: ✨ الأحدث والجديدة (New Releases)
+                val newReleases = apps.sortedByDescending { it.lastUpdated }.take(5)
+                if (newReleases.isNotEmpty()) {
+                    item {
+                        Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                            Text(
+                                text = "✨ الأحدث والجديدة",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(newReleases) { app ->
+                                    TopDownloadCardItem(app = app, onClick = { viewModel.selectApp(app.id) })
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
-            // Section Header
+            // Section 3: 🎯 المقترحة لك (Recommended for You)
             item {
                 Row(
                     modifier = Modifier
@@ -295,19 +377,11 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (searchQuery.isNotEmpty()) "نتائج البحث" else "التطبيقات والألعاب الموصى بها",
+                        text = if (searchQuery.isNotEmpty()) "نتائج البحث" else "🎯 المقترحة لك",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
-                    if (searchQuery.isEmpty()) {
-                        Text(
-                            text = "شاهد الكل",
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable { }
-                        )
-                    }
                 }
             }
 
@@ -611,6 +685,89 @@ fun AppStoreItemRow(
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp
             )
+        }
+    }
+}
+
+@Composable
+fun TopDownloadCardItem(
+    app: AppEntity,
+    onClick: () -> Unit
+) {
+    val colorHex = app.bannerColor
+    val parsedColor = try { Color(android.graphics.Color.parseColor(colorHex)) } catch (e: Exception) { MaterialTheme.colorScheme.primary }
+
+    Card(
+        modifier = Modifier
+            .width(130.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(parsedColor),
+                contentAlignment = Alignment.Center
+            ) {
+                if (app.iconUri != null) {
+                    coil.compose.AsyncImage(
+                        model = app.iconUri,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Text(
+                        text = app.title.take(1),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = app.title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = app.category,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "${app.rating} ",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = Color(0xFFFFB300),
+                    modifier = Modifier.size(12.dp)
+                )
+            }
         }
     }
 }

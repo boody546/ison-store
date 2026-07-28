@@ -488,6 +488,9 @@ fun DevAppItemRow(app: AppEntity, viewModel: StoreViewModel) {
     val colorHex = app.bannerColor
     val parsedColor = try { Color(android.graphics.Color.parseColor(colorHex)) } catch (e: Exception) { MaterialTheme.colorScheme.primary }
 
+    val appReviews by viewModel.getReviewsForApp(app.id).collectAsState(initial = emptyList())
+    var showReviewsSection by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -551,11 +554,91 @@ fun DevAppItemRow(app: AppEntity, viewModel: StoreViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                TextButton(onClick = { showUpdateSection = !showUpdateSection }) {
-                    Text(
-                        text = if (showUpdateSection) "إلغاء التحديث" else "إصدار تحديث مباشر",
-                        fontWeight = FontWeight.Bold
-                    )
+                Row {
+                    TextButton(onClick = { showReviewsSection = !showReviewsSection }) {
+                        Text(
+                            text = if (showReviewsSection) "إغلاق التقييمات" else "التقييمات (${appReviews.size}) ⭐",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    TextButton(onClick = { showUpdateSection = !showUpdateSection }) {
+                        Text(
+                            text = if (showUpdateSection) "إلغاء التحديث" else "إصدار تحديث",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+
+            // User Reviews & Feedback Dashboard Section
+            AnimatedVisibility(visible = showReviewsSection) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("ملاحظات وتعليقات المستخدمين:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${app.rating} ", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(16.dp))
+                            Text(" (${app.ratingsCount})", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    Divider()
+
+                    if (appReviews.isEmpty()) {
+                        Text(
+                            text = "لا توجد تقييمات أو تعليقات من المستخدمين حتى الآن.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            appReviews.forEach { review ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                ) {
+                                    Column(modifier = Modifier.padding(8.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(review.username, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                (1..5).forEach { index ->
+                                                    Icon(
+                                                        imageVector = if (review.rating >= index) Icons.Default.Star else Icons.Outlined.Star,
+                                                        contentDescription = null,
+                                                        tint = if (review.rating >= index) Color(0xFFFFB300) else MaterialTheme.colorScheme.outlineVariant,
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        if (review.comment.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(review.comment, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
